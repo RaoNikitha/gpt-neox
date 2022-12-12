@@ -80,6 +80,27 @@ def _vocab_size_with_padding(orig_vocab_size, args):
     return after
 
 
+def sanitize(text):
+    # Set up reserved tokens.
+    SPACE_TOKEN = '▁'  # Note: not a regular underscore, but the SPM unicode symbol for a space
+    TAB_TOKEN = chr(1)  # Assign rarely used ASCII chars for tabs and newlines. Can also pick rare unicode characters.
+    NEWLINE_TOKEN = chr(2)
+    text = text.replace('\n', NEWLINE_TOKEN)
+    text = text.replace('\t', TAB_TOKEN)
+    text = text.replace(' ', SPACE_TOKEN)
+    return text
+
+def desanitize(text):
+    # Set up reserved tokens.
+    SPACE_TOKEN = '▁'  # Note: not a regular underscore, but the SPM unicode symbol for a space
+    TAB_TOKEN = chr(1)  # Assign rarely used ASCII chars for tabs and newlines. Can also pick rare unicode characters.
+    NEWLINE_TOKEN = chr(2)
+    text = text.replace(NEWLINE_TOKEN, '\n')
+    text = text.replace(TAB_TOKEN, '\t')
+    text = text.replace(SPACE_TOKEN, ' ')
+    return text
+
+    
 class AbstractTokenizer(ABC):
     """Abstract class for tokenizer."""
 
@@ -208,10 +229,10 @@ class SentencePieceTokenizer(AbstractTokenizer):
         }
 
     def tokenize(self, text):
-        return self.tokenizer.encode(text)
+        return self.tokenizer.encode(sanitize(text))
 
     def detokenize(self, token_ids):
-        return self.tokenizer.decode(token_ids)
+        return desanitize(self.tokenizer.decode(token_ids))
 
     @property
     def eod(self):

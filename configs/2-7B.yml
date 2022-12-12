@@ -8,18 +8,19 @@
    # model settings
    "num-layers": 32,
    "hidden-size": 2560,
-   "num-attention-heads": 32,
-   "seq-length": 2048,
-   "max-position-embeddings": 2048,
+   "num-attention-heads": 20,
+   "seq-length": 16384,
+   "max-position-embeddings": 16384,
    "norm": "layernorm",
    "pos-emb": "rotary",
    "no-weight-tying": true,
    "gpt_j_residual": false,
    "output_layer_parallelism": "column",
-   
+   "attention_config" = [[['flash']], 32],
+
    # these should provide some speedup but takes a while to build, set to true if desired
-   "scaled-upper-triang-masked-softmax-fusion": false,
-   "bias-gelu-fusion": false,
+   "scaled-upper-triang-masked-softmax-fusion": true,
+   "bias-gelu-fusion": true,
    
    # init methods
    "init_method": "small_init",
@@ -48,7 +49,8 @@
   },
 
    # batch / data settings
-   "train_micro_batch_size_per_gpu": 4,
+   "train_micro_batch_size_per_gpu": 8,
+   "gradient_accumulation_steps": 2,
    "data-impl": "mmap",
 
    # activation checkpointing
@@ -74,15 +76,16 @@
    },
 
    # misc. training settings
-   "train-iters": 320000,
-   "lr-decay-iters": 320000,
+   "train-iters": 50000,
+   "lr-decay-iters": 50000,
    "distributed-backend": "nccl",
    "lr-decay-style": "cosine",
    "warmup": 0.01,
    "save-interval": 10000,
    "eval-interval": 1000,
    "eval-iters": 10,
-
+   "split": "999,1,0",
+   
    # logging
    "log-interval": 100,
    "steps_per_print": 10,

@@ -592,7 +592,9 @@ def generate_samples_input_from_file(
         "generate_samples_input_from_file() loading input from {}".format(input_file)
     )
     with open(input_file, "r") as f:
-        prompts = f.readlines()
+    #    prompts = f.readlines()
+        prompts = f.read()
+        prompts = prompts.split('<|end_prompt|>')
     prompts = [p.strip() for p in prompts]
     prompts = [p for p in prompts if len(p) > 0]
     print_rank_0(

@@ -1,3 +1,4 @@
+# coding=utf-8
 # Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,13 +18,14 @@
 import argparse
 import multiprocessing
 import os
+import random
 import sys
+sys.path.append('.')
 
-import lm_dataformat as lmd
+#import lm_dataformat as lmd
 
-sys.path.append(
-    os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir))
-)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                             os.path.pardir)))
 import time
 import tqdm
 import torch
@@ -46,7 +48,7 @@ class Encoder(object):
         if self.args.ftfy:
             text = ftfy.fix_text(text)
         ids = {}
-        for key in self.args.jsonl_keys:
+        for key in self.args.json_keys:
             doc_ids = []
             text_ids = Encoder.tokenizer.tokenize(text)
             if len(text_ids) > 0:
@@ -54,84 +56,44 @@ class Encoder(object):
             if self.args.append_eod:
                 doc_ids[-1].append(Encoder.tokenizer.eod)
             ids[key] = doc_ids
+            #print('Encoded doc_ids', doc_ids)
+            #print('decoded doc_ids', Encoder.tokenizer.detokenize(doc_ids[0]))
         return ids, len(text)
-
-
+    
 def get_args():
     parser = argparse.ArgumentParser()
-    group = parser.add_argument_group(title="input data")
-    group.add_argument(
-        "--input",
-        type=str,
-        required=True,
-        help="Path to input jsonl files or lmd archive(s) - if using multiple archives, put them in a comma separated "
-        "list",
-    )
-    group.add_argument(
-        "--jsonl-keys",
-        nargs="+",
-        default=["text"],
-        help="space separate listed of keys to extract from jsonl. Defa",
-    )
-    group.add_argument(
-        "--num-docs",
-        default=None,
-        help="Optional: Number of documents in the input data (if known) for an accurate progress bar.",
-        type=int,
-    )
-    group = parser.add_argument_group(title="tokenizer")
-    group.add_argument(
-        "--tokenizer-type",
-        type=str,
-        required=True,
-        choices=[
-            "HFGPT2Tokenizer",
-            "HFTokenizer",
-            "GPT2BPETokenizer",
-            "CharLevelTokenizer",
-        ],
-        help="What type of tokenizer to use.",
-    )
-    group.add_argument(
-        "--vocab-file", type=str, default=None, help="Path to the vocab file"
-    )
-    group.add_argument(
-        "--merge-file",
-        type=str,
-        default=None,
-        help="Path to the BPE merge file (if necessary).",
-    )
-    group.add_argument(
-        "--append-eod",
-        action="store_true",
-        help="Append an <eod> token to the end of a document.",
-    )
-    group.add_argument("--ftfy", action="store_true", help="Use ftfy to clean text")
-    group = parser.add_argument_group(title="output data")
-    group.add_argument(
-        "--output-prefix",
-        type=str,
-        required=True,
-        help="Path to binary output file without suffix",
-    )
-    group.add_argument(
-        "--dataset-impl",
-        type=str,
-        default="mmap",
-        choices=["lazy", "cached", "mmap"],
-        help="Dataset implementation to use. Default: mmap",
-    )
+    group = parser.add_argument_group(title='input data')
+    group.add_argument('--input', type=str, required=True,
+                       help='Path to input lmd archive(s) - if using multiple archives, put them in a comma separated '
+                            'list')
+    group.add_argument('--json-keys', nargs='+', default=['text'],
+                       help='space separate listed of keys to extract from json')
+    group.add_argument('--num-docs', default=None,
+                       help='Number of documents in the input data (if known) for an accurate progress bar.', type=int)
+    group = parser.add_argument_group(title='tokenizer')
+    group.add_argument('--tokenizer-type', type=str, required=True,
+                       choices=['HFGPT2Tokenizer', 'SPMTokenizer', 'HFTokenizer',
+                                'GPT2BPETokenizer', 'CharLevelTokenizer'],
+                       help='What type of tokenizer to use.')
+    group.add_argument('--vocab-file', type=str, default=None,
+                       help='Path to the vocab file')
+    group.add_argument('--merge-file', type=str, default=None,
+                       help='Path to the BPE merge file (if necessary).')
+    group.add_argument('--append-eod', action='store_true',
+                       help='Append an <eod> token to the end of a document.')
+    group.add_argument('--ftfy', action='store_true',
+                       help='Use ftfy to clean text')
+    group = parser.add_argument_group(title='output data')
+    group.add_argument('--output-prefix', type=str, required=True,
+                       help='Path to binary output file without suffix')
+    group.add_argument('--dataset-impl', type=str, default='mmap',
+                       choices=['lazy', 'cached', 'mmap'])
 
-    group = parser.add_argument_group(title="runtime")
-    group.add_argument(
-        "--workers", type=int, default=1, help="Number of worker processes to launch"
-    )
-    group.add_argument(
-        "--log-interval",
-        type=int,
-        default=100,
-        help="Interval between progress updates",
-    )
+    group = parser.add_argument_group(title='runtime')
+    group.add_argument('--workers', type=int, default=1,
+                       help='Number of worker processes to launch')
+    group.add_argument('--log-interval', type=int, default=100,
+                       help='Interval between progress updates')
     args = parser.parse_args()
     args.keep_empty = False
 
@@ -143,22 +105,43 @@ def get_args():
     return args
 
 
-def yield_from_files(fnames: list, semaphore):
+def sanitize(text):
+    # Set up reserved tokens.
+    SPACE_TOKEN = '▁'  # Note: not a regular underscore, but the SPM unicode symbol for a space
+    TAB_TOKEN = chr(1)  # Assign rarely used ASCII chars for tabs and newlines. Can also pick rare unicode characters.
+    NEWLINE_TOKEN = chr(2)
+    text = text.replace('\n', NEWLINE_TOKEN)
+    text = text.replace('\t', TAB_TOKEN)
+    text = text.replace(' ', SPACE_TOKEN)
+    return text
+
+
+def yield_from_files(dir, semaphore):
     """
     Iterator over input documents using lm_dataformat. Should be able to handle jsons / texts /
     other compressed formats. Also filters out empty documents.
 
     :param fnames: list of filenames
     """
+    fnames = []
+    for root, _, files in os.walk(dir):
+        for file in files:
+            fnames.append(os.path.join(root, file))
+    random.shuffle(fnames)
+
+    def read(fname):
+        with open(fname, encoding='utf-8', errors='ignore') as inp:
+            doc = inp.read()
+        doc = sanitize(doc)
+        return doc
 
     def yielder(fname, semaphore):
-        for f in filter(lambda x: x, lmd.Reader(fname).stream_data()):
+        f = read(fname)
+        if f:
             semaphore.acquire()
             yield f
 
     for fname in fnames:
-        semaphore.acquire()
-
         yield from yielder(fname, semaphore)
 
 
@@ -174,7 +157,7 @@ def main():
     semaphore = Semaphore(10000 + args.workers)
 
     # use multiprocessing to iterate over input documents
-    fin = yield_from_files(args.input.split(","), semaphore)
+    fin = yield_from_files(args.input, semaphore)
 
     if args.workers > 1:
         pool = multiprocessing.Pool(args.workers, initializer=encoder.initializer)
@@ -183,23 +166,19 @@ def main():
         encoder.initializer()
         encoded_docs = (encoder.encode(doc) for doc in fin)
 
-    # make a dataset builder for each key in args.jsonl_keys
+    # make a dataset builder for each key in args.json_keys
     # each key will output to a different file beginning with args.output_prefix
     output_bin_files = {}
     output_idx_files = {}
     builders = {}
-    for key in args.jsonl_keys:
-        output_bin_files[key] = "{}_{}_{}.bin".format(
-            args.output_prefix, key, "document"
-        )
-        output_idx_files[key] = "{}_{}_{}.idx".format(
-            args.output_prefix, key, "document"
-        )
-        builders[key] = indexed_dataset.make_builder(
-            output_bin_files[key],
-            impl=args.dataset_impl,
-            vocab_size=tokenizer.vocab_size,
-        )
+    for key in ("text",): #args.json_keys:
+        output_bin_files[key] = "{}_{}_{}.bin".format(args.output_prefix,
+                                                      key, "document")
+        output_idx_files[key] = "{}_{}_{}.idx".format(args.output_prefix,
+                                                      key, "document")
+        builders[key] = indexed_dataset.make_builder(output_bin_files[key],
+                                                     impl=args.dataset_impl,
+                                                     vocab_size=tokenizer.vocab_size)
 
     # actually do tokenization
     proc_start = time.time()
@@ -207,7 +186,6 @@ def main():
     pbar = tqdm.tqdm()
     for i, (doc, bytes_processed) in enumerate(encoded_docs, start=1):
         total_bytes_processed += bytes_processed
-
         # release semaphore so `yield_from_files` can add another file to the buffer
         semaphore.release()
 
@@ -224,15 +202,18 @@ def main():
             elapsed = current - proc_start
             mbs = total_bytes_processed / elapsed / 1024 / 1024
             pbar.set_description(
-                f"Processed {i}{'' if args.num_docs is None else '/' + str(args.num_docs)} documents ({i / elapsed} docs/s, {mbs} MB/s)."
-            )
+                f"Processed {i}{'' if args.num_docs is None else '/' + str(args.num_docs)} documents ({i / elapsed} docs/s, {mbs} MB/s).")
             if i != 0:
                 pbar.update(args.log_interval)
 
+
     # save output file
-    for key in args.jsonl_keys:
+    for key in args.json_keys:
         builders[key].finalize(output_idx_files[key])
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
+
+# sudo python3 tools/preprocess_data.py --input /data/GitHubMining/CurrentStateProcessed/test/ --tokenizer-type SPMTokenizer --vocab-file /code/Code/SoftwareTesting/FileLevel/DataPrep/vocabulary_10l.model --output-prefix /data/GitHubMining/CurrentStateProcessed/processed-test --workers 32
+# sudo python3 tools/preprocess_data.py --input /data/GitHubMining/CurrentStateProcessed/train/ --tokenizer-type SPMTokenizer --vocab-file /code/Code/SoftwareTesting/FileLevel/DataPrep/vocabulary_10l.model --output-prefix /data/GitHubMining/CurrentStateProcessed/processed-train --workers 32

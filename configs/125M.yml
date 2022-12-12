@@ -12,14 +12,14 @@
    "seq-length": 2048,
    "max-position-embeddings": 2048,
    "norm": "layernorm",
-   "pos-emb": "rotary",
+   "pos-emb": "alibi",
    "no-weight-tying": true,
    "gpt_j_residual": false,
    "output_layer_parallelism": "column",
    
    # these should provide some speedup but takes a while to build, set to true if desired
-   "scaled-upper-triang-masked-softmax-fusion": false,
-   "bias-gelu-fusion": false,
+   "scaled-upper-triang-masked-softmax-fusion": true,
+   "bias-gelu-fusion": true,
    
    # init methods
    "init_method": "small_init",
@@ -49,9 +49,10 @@
   },
 
    # batch / data settings
-   "train_micro_batch_size_per_gpu": 4,
+   "train_micro_batch_size_per_gpu": 16,
+   "gradient_accumulation_steps": 4,
    "data-impl": "mmap",
-
+ 
    # activation checkpointing
    "checkpoint-activations": true,
    "checkpoint-num-layers": 1,
@@ -74,14 +75,15 @@
    },
 
    # misc. training settings
-   "train-iters": 320000,
-   "lr-decay-iters": 320000,
+   "train-iters": 40000,
+   "lr-decay-iters": 40000,
    "distributed-backend": "nccl",
    "lr-decay-style": "cosine",
    "warmup": 0.01,
-   "save-interval": 10000,
-   "eval-interval": 1000,
+   "save-interval": 2500,
+   "eval-interval": 2500,
    "eval-iters": 10,
+   "split": "999,1,0",
 
    # logging
    "log-interval": 100,
