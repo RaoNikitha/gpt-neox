@@ -1,5 +1,5 @@
-#
-# Copyright 2021 Biderman et al. This file is based on code by the authors denoted below and has been modified from its original version.
+# Copyright (c) 2021 EleutherAI
+# This file is based on code by the authors denoted below and has been modified from its original version.
 #
 # Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
 #
@@ -270,10 +270,15 @@ class ParallelSelfAttention(nn.Module):
             )
         else:
             if self.use_flash_attention:
-                from megatron.model.flash_attention import flash_attn_unpadded_qkvpacked_func
+                from megatron.model.flash_attention import (
+                    flash_attn_unpadded_qkvpacked_func,
+                )
+
                 self.flash_attention_function = flash_attn_unpadded_qkvpacked_func
                 if self.pos_emb == "alibi":
-                    raise ValueError('Flash attention is currently not compatible with AliBi positional embeddings. Use sinuisoidal, learned, or rotary embeddings instead.')
+                    raise ValueError(
+                        "Flash attention is currently not compatible with AliBi positional embeddings. Use sinuisoidal, learned, or rotary embeddings instead."
+                    )
             else:
                 self.scale_mask_softmax = FusedScaleMaskSoftmax(
                     input_in_fp16=self.fp16,
@@ -413,9 +418,15 @@ class ParallelSelfAttention(nn.Module):
             key_layer.size(0),
         )
         # [s, b, np, hn] -> [b, s, np, hn] -> [b * s, 1, np, hn]
-        query_layer = query_layer.transpose(0, 1).reshape(output_size[0] * output_size[2], 1, output_size[1], -1)
-        key_layer = key_layer.transpose(0, 1).reshape(output_size[0] * output_size[3], 1, output_size[1], -1)
-        value_layer = value_layer.transpose(0, 1).reshape(output_size[0] * output_size[3], 1, output_size[1], -1)
+        query_layer = query_layer.transpose(0, 1).reshape(
+            output_size[0] * output_size[2], 1, output_size[1], -1
+        )
+        key_layer = key_layer.transpose(0, 1).reshape(
+            output_size[0] * output_size[3], 1, output_size[1], -1
+        )
+        value_layer = value_layer.transpose(0, 1).reshape(
+            output_size[0] * output_size[3], 1, output_size[1], -1
+        )
 
         # Combined q/k/v into [b * s, 3, np, hn].
         qkv = torch.concat([query_layer, key_layer, value_layer], dim=1)
@@ -423,13 +434,25 @@ class ParallelSelfAttention(nn.Module):
         batch_size = output_size[0]
         seqlen = output_size[2]
         max_s = seqlen
-        cu_seqlens = torch.arange(0, (batch_size + 1) * seqlen, step=seqlen, dtype=torch.int32, device=qkv.device)
+        cu_seqlens = torch.arange(
+            0,
+            (batch_size + 1) * seqlen,
+            step=seqlen,
+            dtype=torch.int32,
+            device=qkv.device,
+        )
         output = self.flash_attention_function(
-            qkv, cu_seqlens, max_s, self.dropout_p if self.training else 0.0,
-            softmax_scale=None, causal=True
+            qkv,
+            cu_seqlens,
+            max_s,
+            self.dropout_p if self.training else 0.0,
+            softmax_scale=None,
+            causal=True,
         )
         # [b * sq, np, hn] -> [b, sq, np, hn]
-        matmul_result = output.view(output_size[0], output_size[2], output.shape[1], output.shape[2])
+        matmul_result = output.view(
+            output_size[0], output_size[2], output.shape[1], output.shape[2]
+        )
         # [b, sq, np, hn] -> [b, np, sq, hn]
         matmul_result = matmul_result.transpose(1, 2)
 
@@ -523,9 +546,7 @@ class ParallelSelfAttention(nn.Module):
             present = torch.stack((key_layer, value_layer))
 
         if self.use_flash_attention:
-            context_layer = self.flash_attention(
-                query_layer, key_layer, value_layer
-            )
+            context_layer = self.flash_attention(query_layer, key_layer, value_layer)
         elif not self.sparse:
             context_layer = self.attention(
                 query_layer, key_layer, value_layer, layer_past, attention_mask
@@ -587,6 +608,7 @@ class ParallelTransformerLayer(nn.Module):
         self.hidden_dropout = neox_args.hidden_dropout
         self.bias_dropout_fusion = neox_args.bias_dropout_fusion
         self.gpt_j_residual = neox_args.gpt_j_residual
+        self.gpt_j_tied = neox_args.gpt_j_tied
 
         if self.gpt_j_residual:
             self.reduce = mpu.mappings.reduce_from_model_parallel_region
@@ -605,6 +627,8 @@ class ParallelTransformerLayer(nn.Module):
         )
 
         # Layernorm on the output of the attention layer.
+        # If GPT-J residuals are used, this is surpurfulous but leaving it in
+        # leads to cleaner code
         self.post_attention_layernorm = norm(neox_args.hidden_size, eps=eps)
 
         # MLP
@@ -634,14 +658,23 @@ class ParallelTransformerLayer(nn.Module):
         # x: [b, s, h]
         if self.gpt_j_residual:
             # pseudocode:
-            # x = x + attn(ln1(x)) + mlp(ln2(x))
+            # x = x + attn(ln(x)) + mlp(ln(x))
             # this means we can avoid doing the allreduce in the attn / mlp outputs
             # to save communication time (we can do a single allreduce after we add mlp / attn outputs).
-
-            # attention_output = attn(ln1(x))
+            # due to a bug, the two layernorms are not tied in GPT-NeoX-20B. This is non-desirable, but
+            # we preserve the functionality for backwards compatibility
+            
             residual = x
+            # applies the correct normalization depending on if the norms are tied
+            if self.gpt_j_tied:
+                x1, x2 = self.input_layernorm(x), self.post_attention_layernorm(x)
+            else:
+                x = self.input_layernorm(x)
+                x1, x2 = x, x
+                
+            # attention operator
             attention_output, attention_bias = self.attention(
-                self.input_layernorm(x), attention_mask, layer_past=layer_past
+                x1, attention_mask, layer_past=layer_past
             )
             if self.use_cache:
                 attention_output, presents = attention_output
@@ -655,8 +688,8 @@ class ParallelTransformerLayer(nn.Module):
                     prob=self.hidden_dropout,
                 )
 
-            # output = mlp(ln2(x)) + attention_output
-            mlp_output, mlp_bias = self.mlp(self.post_attention_layernorm(x))
+            # mlp operator
+            mlp_output, mlp_bias = self.mlp(x2)
             with torch.enable_grad():
                 output = bias_dropout_fn(
                     mlp_output,
@@ -665,8 +698,8 @@ class ParallelTransformerLayer(nn.Module):
                     prob=self.hidden_dropout,
                 )
 
-            # output = output + residual
-            output = residual + self.reduce(output)
+            # output = (x + attn(ln(x)) + mlp(ln(x))
+            output   = residual         + self.reduce(output)
         else:
             # pseudocode:
             # x = x + attn(ln1(x))

@@ -16,7 +16,7 @@
    "no-weight-tying": true,
    "gpt_j_residual": false,
    "output_layer_parallelism": "column",
-   
+
    # these should provide some speedup but takes a while to build, set to true if desired
    "scaled-upper-triang-masked-softmax-fusion": true,
    "bias-gelu-fusion": true,
@@ -36,7 +36,7 @@
      }
    },
    "min_lr": 0.00006,
-   
+
    # for all zero_optimization options, see https://www.deepspeed.ai/docs/config-json/#zero-optimizations-for-fp16-training
    "zero_optimization": {
     "stage": 1,

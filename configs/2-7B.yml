@@ -25,7 +25,7 @@
    # init methods
    "init_method": "small_init",
    "output_layer_init_method": "wang_init",
-   
+
    # optimizer settings
    "optimizer": {
      "type": "Adam",
