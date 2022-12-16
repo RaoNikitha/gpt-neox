@@ -81,8 +81,8 @@
    "distributed-backend": "nccl",
    "lr-decay-style": "cosine",
    "warmup": 0.01,
-   "save-interval": 10000,
-   "eval-interval": 1000,
+   "save-interval": 500,
+   "eval-interval": 500,
    "eval-iters": 10,
    "split": "999,1,0",
    
