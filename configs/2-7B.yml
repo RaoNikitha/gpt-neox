@@ -16,7 +16,7 @@
    "no-weight-tying": true,
    "gpt_j_residual": false,
    "output_layer_parallelism": "column",
-   "attention_config" = [[['flash']], 32],
+   "attention_config" = [[['flash'], 'all']],
 
    # these should provide some speedup but takes a while to build, set to true if desired
    "scaled-upper-triang-masked-softmax-fusion": true,
