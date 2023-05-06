@@ -61,6 +61,7 @@ def main():
             model=model,
             input_file=neox_args.sample_input_file,
             output_file=neox_args.sample_output_file,
+            number_of_samples=neox_args.num_samples,
             maximum_tokens=neox_args.maximum_tokens,
             recompute=neox_args.recompute,
             temperature=neox_args.temperature,

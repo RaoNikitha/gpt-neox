@@ -217,5 +217,6 @@ def main():
 if __name__ == '__main__':
     main()
 
-# sudo python3 tools/preprocess_data.py --input /data/GitHubMining/CurrentStateProcessed/test/ --tokenizer-type SPMTokenizer --vocab-file /code/Code/SoftwareTesting/FileLevel/DataPrep/vocabulary_10l.model --output-prefix /data/GitHubMining/CurrentStateProcessed/processed-test --workers 32
-# sudo python3 tools/preprocess_data.py --input /data/GitHubMining/CurrentStateProcessed/train/ --tokenizer-type SPMTokenizer --vocab-file /code/Code/SoftwareTesting/FileLevel/DataPrep/vocabulary_10l.model --output-prefix /data/GitHubMining/CurrentStateProcessed/processed-train --workers 32
+# sudo python3 tools/preprocess_data.py --input /data/GitHubMining/CurrentStateProcessed/test/ --tokenizer-type SPMTokenizer --vocab-file /code/Code/SoftwareTesting/FileLevel/DataPrep/vocabulary_10l.model --append-eod --output-prefix /data/GitHubMining/UpdatedTokenizedData/test/processed-test --workers 32
+# sudo python3 tools/preprocess_data.py --input /data/GitHubMining/CurrentStateProcessed/train/ --tokenizer-type SPMTokenizer --vocab-file /code/Code/SoftwareTesting/FileLevel/DataPrep/vocabulary_10l.model --append-eod --output-prefix /data/GitHubMining/UpdatedTokenizedData/train/processed-train --workers 32
+# wrong - add flag to add eof tag

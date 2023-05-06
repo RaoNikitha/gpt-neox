@@ -9,14 +9,14 @@
    "num-layers": 32,
    "hidden-size": 2560,
    "num-attention-heads": 20,
-   "seq-length": 16384, #8192
-   "max-position-embeddings": 16384,  #8192
+   "seq-length": 8192, #16384,
+   "max-position-embeddings": 8192,  #16384,
    "norm": "layernorm",
    "pos-emb": "rotary",
    "no-weight-tying": true,
    "gpt_j_residual": false,
    "output_layer_parallelism": "column",
-   "attention_config": [[['flash'], 'all']],
+   #"attention_config": [[['flash'], 'all']],
 
    # these should provide some speedup but takes a while to build, set to true if desired
    "scaled-upper-triang-masked-softmax-fusion": true,
@@ -51,7 +51,7 @@
    # batch / data settings
    # total batch size:16 for 16k, 32 for 8k
    "train_micro_batch_size_per_gpu": 8, 
-   "gradient_accumulation_steps": 2,
+   "gradient_accumulation_steps": 4,
    "data-impl": "mmap",
 
    # activation checkpointing
@@ -72,6 +72,7 @@
      "enabled": true,
      "loss_scale": 0,
      "loss_scale_window": 1000,
+     "initial_scale_power": 19,
      "hysteresis": 2,
      "min_loss_scale": 1
    },
@@ -82,14 +83,14 @@
    "distributed-backend": "nccl",
    "lr-decay-style": "cosine",
    "warmup": 0.01,
-   "save-interval": 500,
+   "save-interval": 100,
    "eval-interval": 500,
    "eval-iters": 10,
    "split": "999,1,0",
    
    # logging
-   "log-interval": 100,
-   "steps_per_print": 10,
-   "keep-last-n-checkpoints": 6,
+   "log-interval": 1, #100
+   "steps_per_print": 1, #10
+   "keep-last-n-checkpoints": 3,
    "wall_clock_breakdown": true,
 }

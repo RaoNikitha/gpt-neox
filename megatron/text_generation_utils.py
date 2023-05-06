@@ -460,14 +460,24 @@ def generate_samples_from_prompt(
                 context_tokens = [eos_token_id]
             else:
                 context_tokens = neox_args.tokenizer.tokenize(raw_text)
-            context_length = len(context_tokens)
-
-            if context_length >= (neox_args.seq_length // 2):
+                #print('2:', context_tokens)
+                if len(context_tokens) >= (neox_args.seq_length - maximum_tokens):
+                    print(f'Warning! Context length exceeded, slicing context tokens to fix')
+                    print(f'BEFORE:\n\tlen(context_tokens) {len(context_tokens)}')
+                    num_excess_tokens = len(context_tokens) - (neox_args.seq_length - maximum_tokens) + 2 #for the separator and one extra token
+                    context_tokens = context_tokens[num_excess_tokens:]
+                    print(f'AFTER:\tlen(context_tokens) {len(context_tokens)}')
+                context_length = len(context_tokens)
+                    
+            print('context_length (raw_text):', context_length)
+            #if context_length >= (neox_args.seq_length // 2):
+            if context_length >= (neox_args.seq_length - maximum_tokens):
                 print_rank_0(
                     "\nWarning! Context length",
                     context_length,
-                    "\nPlease give smaller context (e.g. half of the "
-                    "max sequence length)!",
+                    #"\nPlease give smaller context (e.g. half of the "
+                    "\nPlease give smaller context (e.g. "
+                    f"max sequence length ({neox_args.seq_length}) - maximum tokens ({maximum_tokens}))!",
                 )
         if not is_mp_rank_0():
             context_tokens = neox_args.tokenizer.tokenize("EMPTY TEXT")
@@ -544,12 +554,62 @@ def generate_samples_from_prompt(
 
     return generated_texts
 
+def shorten_prompts(neox_args, maximum_tokens, raw_text):
+    context_tokens = neox_args.tokenizer.tokenize(raw_text)
+    if len(context_tokens) >= (neox_args.seq_length - maximum_tokens):
+        raw_text_split = raw_text.split('<|codetestpair|>')
+        # with code context case
+        if len(raw_text_split) == 2:
+            print(f'Warning! Context length exceeded, slicing code to fix')
+            print(f'BEFORE:\n\tlen(context_tokens) {len(context_tokens)}')
+            num_excess_tokens = len(context_tokens) - (neox_args.seq_length - maximum_tokens) + 2 #for the separator and one extra token
+            code_text = raw_text_split[0]
+            test_text = raw_text_split[1]
+            code_tokens = neox_args.tokenizer.tokenize(code_text)
+            test_tokens = neox_args.tokenizer.tokenize(test_text)
+            print(f'\tlen(code_tokens) {len(code_tokens)}')
+            print(f'\tlen(test_tokens) {len(test_tokens)}')
+            # slice last n excess tokens
+            code_tokens = code_tokens[:-num_excess_tokens]
+            print(f'AFTER:\n\tlen(code_tokens) {len(code_tokens)}')
+            context_tokens = code_tokens
+            context_tokens.extend(neox_args.tokenizer.tokenize('<|codetestpair|>'))
+            context_tokens.extend(test_tokens)
+            print(f'\tlen(context_tokens) {len(context_tokens)}')
+            # test file too long, slice first n excess tokens from test
+            print('test too long',len(context_tokens) >= (neox_args.seq_length - maximum_tokens))
+            if len(context_tokens) >= (neox_args.seq_length - maximum_tokens):
+                print(f'Warning! Context length exceeded, slicing test to fix')
+                print(f'BEFORE:\tlen(context_tokens) {len(context_tokens)}')
+                num_excess_tokens = len(context_tokens) - (neox_args.seq_length - maximum_tokens)
+                print(f'\tnum_excess_tokens {num_excess_tokens}')
+                context_tokens = context_tokens[num_excess_tokens:]
+                print(f'AFTER:\tlen(context_tokens) {len(context_tokens)}')
+                print(context_tokens)
+
+        # no code context case
+        elif len(raw_text_split) == 1:
+            print(f'Warning! Context length exceeded, slicing test to fix (no context case)')
+            test_text = raw_text_split[0]
+            test_tokens = neox_args.tokenizer.tokenize(test_text)
+            print(f'\tlen(test_tokens) {len(test_tokens)}')
+            num_excess_tokens = len(test_tokens) - (neox_args.seq_length - maximum_tokens) + 2 #for the separator and one extra token
+            print(f'\tnum_excess_tokens {num_excess_tokens}')
+            # test file too long, slice first n excess tokens from test
+            test_tokens = test_tokens[num_excess_tokens:]
+            print(f'AFTER:\n\tlen(test_tokens) {len(test_tokens)}')
+            context_tokens = test_tokens
+            print(f'\tlen(context_tokens) {len(context_tokens)}')
+
+    print('Sanity:', len(context_tokens))
+    return neox_args.tokenizer.detokenize(context_tokens)
 
 def generate_samples_input_from_file(
     neox_args,
     model,
     input_file,
     output_file=None,
+    number_of_samples: int = 10,
     eos_token_id: int = None,
     maximum_tokens: int = 64,
     recompute: bool = False,
@@ -567,6 +627,8 @@ def generate_samples_input_from_file(
 
     input_file: path to input file. Each line in the input file will be treated as separate prompt. The line break at the end of the line is not included in the prompt.
     output_file: file where generation results are to be stored in jsonl format. defaults to input_file+'.output.jsonl' if not defined
+
+    number_of_samples (default 10): number of samples to be generated
 
     eos_token_id: end of text token at which completion is terminated, even if max_tokes count has not been reached
     maximum_tokens: maximum number of tokens to be generated
@@ -596,8 +658,16 @@ def generate_samples_input_from_file(
     #    prompts = f.readlines()
         prompts = f.read()
         prompts = prompts.split('<|end_prompt|>')
+    #print(prompts)
     prompts = [p.strip() for p in prompts]
     prompts = [p for p in prompts if len(p) > 0]
+    print('num unique prompts', len(prompts))
+    #print('slice code context if prompt too long')
+    #prompts = [shorten_prompts(neox_args, maximum_tokens, p) for p in prompts]
+    
+    print('num samples per prompt', number_of_samples)
+    prompts = [p for p in prompts for i in range(number_of_samples)]
+    
     print_rank_0(
         "generate_samples_input_from_file() prompts loaded: {}".format(len(prompts))
     )
@@ -629,6 +699,11 @@ def generate_samples_input_from_file(
             for item in generated_texts:
                 f_out.write(json.dumps(item) + "\n")
     print_rank_0("generate_samples_input_from_file() done")
+    print_rank_0(
+        "generate_samples_input_from_file() saving to output file {}".format(
+            output_file
+            )
+    )
     return generated_texts
 
 

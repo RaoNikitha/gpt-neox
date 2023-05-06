@@ -1,6 +1,6 @@
 # Suggested data paths when using GPT-NeoX locally
 {
-  "data-path": "data/train/processed-train_text_document",
+  "data-path": "/data/GitHubMining/UpdatedTokenizedData/train/processed-train_text_document", # use UpdatedTokenizedData
 
   # or for weighted datasets:
   # "train-data-paths": ["data/enron/enron_text_document", "data/enron/enron_text_document"],
@@ -16,17 +16,17 @@
   # "weighted_sampler_alpha": 0.3,
 
   "tokenizer_type": "SPMTokenizer",
-  "vocab-file": "data/vocabulary_10l.model",
-  "merge-file": "data/gpt2-merges.txt",
+  "vocab-file": "/code/Code/SoftwareTesting/FileLevel/DataPrep/vocabulary_10l.model",
+  "merge-file": "/data/gpt2-merges.txt",
 
 
-  "save": "neox-outputs/checkpoints",
-  "load": "neox-outputs/checkpoints",
+  "save": "/data/gpt-neox-2.7B-outputs/checkpoints",
+  "load": "/data/gpt-neox-2.7B-outputs/checkpoints",
   "checkpoint_validation_with_forward_pass": False,
 
 
-  "tensorboard-dir": "neox-outputs/tensorboard",
-  "log-dir": "neox-outputs/logs",
+  "tensorboard-dir": "/data/gpt-neox-2.7B-outputs/tensorboard",
+  "log-dir": "/data/gpt-neox-2.7B-outputs/logs",
   "use_wandb": True,
   "wandb_host": "https://api.wandb.ai",
   "wandb_project": "neox"
