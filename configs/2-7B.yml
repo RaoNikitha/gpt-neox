@@ -9,14 +9,14 @@
    "num-layers": 32,
    "hidden-size": 2560,
    "num-attention-heads": 20,
-   "seq-length": 8192, #16384,
-   "max-position-embeddings": 8192,  #16384,
+   "seq-length": 8192,
+   "max-position-embeddings": 8192,
    "norm": "layernorm",
    "pos-emb": "rotary",
    "no-weight-tying": true,
    "gpt_j_residual": false,
    "output_layer_parallelism": "column",
-   #"attention_config": [[['flash'], 'all']],
+   "attention_config": [[['flash'], 'all']],
 
    # these should provide some speedup but takes a while to build, set to true if desired
    "scaled-upper-triang-masked-softmax-fusion": true,
@@ -84,13 +84,13 @@
    "lr-decay-style": "cosine",
    "warmup": 0.01,
    "save-interval": 100,
-   "eval-interval": 500,
+   "eval-interval": 100,
    "eval-iters": 10,
    "split": "999,1,0",
    
    # logging
-   "log-interval": 1, #100
-   "steps_per_print": 1, #10
-   "keep-last-n-checkpoints": 3,
+   "log-interval": 100,
+   "steps_per_print": 10,
+   "keep-last-n-checkpoints": 5,
    "wall_clock_breakdown": true,
 }
